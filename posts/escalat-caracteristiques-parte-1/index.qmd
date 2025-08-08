@@ -86,7 +86,7 @@ feature_x = 'price'
 feature_y = 'space'
 X_features = ['Preu (€)', 'Superfície (m²)']
 
-fig, ax = plt.subplots(1, 3, figsize=(15, 4.5))
+fig, ax = plt.subplots(1, 3, figsize=(8, 2.5))
 
 # Gràfic 1: Dades Originals
 ax[0].scatter(X_train[feature_x], X_train[feature_y])
@@ -112,8 +112,8 @@ ax[2].set_title(r'3. Després de l’Escalat ((X - $\mu$) / $\sigma$)')
 ax[2].axis('equal')
 ax[2].grid(True)
 
-fig.suptitle('L’Efecte Pas a Pas de l’Estandardització', fontsize=16)
 plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+fig.suptitle('L’Efecte Pas a Pas de l’Estandardització')
 plt.show()
 ```
 
@@ -203,7 +203,7 @@ feature_x = 'price'
 feature_y = 'space'
 X_features = ['Preu (€)', 'Superfície (m²)']
 
-fig, ax = plt.subplots(1, 3, figsize=(15, 4.5))
+fig, ax = plt.subplots(1, 3, figsize=(8, 2.5))
 
 # Gràfic 1: Dades Originals
 ax[0].scatter(X_train[feature_x], X_train[feature_y])
@@ -229,8 +229,8 @@ ax[2].set_title(r'3. Després de l’Escalat ((X - $\mu$) / $\sigma$)')
 ax[2].axis('equal')
 ax[2].grid(True)
 
-fig.suptitle('L’Efecte Pas a Pas de l’Estandardització', fontsize=16)
 plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+fig.suptitle('L’Efecte Pas a Pas de l’Estandardització')
 plt.show()
 ```
 
