@@ -1,0 +1,904 @@
+---
+title: "Escalat de Característiques Part 2: Estandardització, Normalització i Escalat Robust en Python i R"
+author: "January Tabaka"
+date: "2025-08-20"
+description: "Una guia pràctica de les tres tècniques d'escalat de característiques més comunes en aprenentatge automàtic: estandardització, normalització i escalat robust. Inclou exemples de codi en Python i R, i una anàlisi de la seva sensibilitat a valors atípics."
+categories: 
+  - Fonaments
+  - Preprocessament de Dades
+  - Escalat
+  - Estandardització
+  - Normalització
+  - Escalat Robust
+  - "Sèrie: Escalat de Característiques"
+image: "/images/standardization.png"
+lang: ca
+toc: true
+toc-depth: 3
+code-copy: true
+draft: false
+---
+
+En el [post anterior](/posts/escalat-caracteristiques-part-1/index.qmd) vam veure per què l'escalat de dades és un pas crític en l'aprenentatge automàtic (*machine learning*). Ara, passem al **com**. En aquesta guia explorarem les tres tècniques d'escalat més comunes i la seva implementació tant en Python com en R.
+
+:::{.callout-important collapse="true"}
+### Una nota ràpida sobre la terminologia: Estandardització vs. Normalització
+
+El món de l'estadística té moltes formes de normalització. Tanmateix, en preparar dades específicament per a models d'aprenentatge automàtic, la comunitat generalment utilitza els següents termes, que són els adoptats en aquest post:
+
+- **Estandardització** es refereix a l'**escalat Z-score**: transformar les dades perquè tinguin una **mitjana de 0 i una desviació estàndard d'1**.
+
+- **Normalització** sol referir-se a l'**escalat Min-Max**: transformar les dades perquè s'ajustin a un rang específic, normalment **[0, 1]**.
+
+Tot i que existeixen altres mètodes d'escalat (alguns dels quals es cobriran al post sobre transformadors avançats), aquests dos, juntament amb l'Escalat Robust, són les tècniques fonamentals utilitzades més freqüentment.
+:::
+
+Primer, crearem un conjunt de dades senzill per il·lustrar els conceptes.
+
+::: {.panel-tabset}
+
+### Python
+
+```{python}
+#| label: python-setup-data
+
+import numpy as np
+
+# Un conjunt de dades senzill amb una característica
+data = np.array([[10.0], [20.0], [30.0], [40.0], [50.0]])
+
+print("Dades: ", data.T)
+```
+
+### R
+
+```{r}
+#| label: r-setup-data
+library(tibble)
+
+# Un conjunt de dades senzill amb una característica
+data <- tibble(feature = c(10, 20, 30, 40, 50))
+
+cat("Dades: [", paste(data$feature, collapse = " "), "]")
+```
+
+:::
+
+## Estandardització (normalització Z-score)
+
+**Principi**: L'estandardització reescala les dades perquè tinguin una mitjana de 0 i una desviació estàndard d'1. A això se li sol dir normalització Z-score.
+
+**Fórmula**:
+$$ Z = \frac{X - \mu}{\sigma} $$
+**On**:
+
+- $X$ - és el vector de valors originals (la transformació s'aplica element per element)  
+- $\mu$ - és la seva mitjana  
+- $\sigma$ - és la seva desviació estàndard  
+
+**Quan utilitzar-la**: Aquest és l'escalador més comú i utilitzat per defecte. És especialment efectiu si les teves dades segueixen una distribució Gaussiana (normal).
+
+Aquí tens com implementar-ho utilitzant les llibreries estàndard en Python i R.```
+
+::: {.panel-tabset}
+
+### Python: `StandardScaler`
+
+```{python}
+#| label: py-z-scaler
+import numpy as np
+from sklearn.preprocessing import StandardScaler
+
+# Inicialitzar i ajustar/transformar les dades
+std_scaler = StandardScaler()
+standardized_data = std_scaler.fit_transform(data)
+
+print("Mitjana apresa:", std_scaler.mean_,
+      "\nDesviació estàndard apresa:", std_scaler.scale_,
+      "\nDades estandarditzades:", np.round(standardized_data.T, 3))
+```
+
+### R: `step_normalize()`
+
+```{r}
+#| label: r-step_normalize
+#| message: false
+library(tidymodels)
+library(dplyr)
+
+# Definir la recepta
+standardization_recipe <- recipe(~ feature, data = data) %>% step_normalize(feature)
+
+# Preparar la recepta
+# Aquest pas aprèn la mitjana i la desviació estàndard a partir de les dades.
+prepared_standarization_recipe <- prep(standardization_recipe, training = data)
+
+# Aplicar la recepta
+# Aquest pas aplica la transformació apresa.
+standardized_data <- bake(prepared_standarization_recipe, new_data = data)
+
+# Obtenir els paràmetres apresos
+mean_sd <- tidy(prepared_standarization_recipe, number = 1)
+
+# Extreure els valors específics del tibble ordenat
+mean_val <- mean_sd %>% filter(statistic == "mean") %>% pull(value)
+sd_val   <- mean_sd %>% filter(statistic == "sd") %>% pull(value)
+
+cat("\nMitjana apresa: ", mean_val,
+    '\nDesviació estàndard apresa: ', sd_val,
+    "\nDades estandarditzades: [",
+    paste(round(standardized_data$feature, 3), collapse = " "),"]")
+```
+
+:::
+
+Si compares els resultats de Python i R, notaràs que són lleugerament diferents. Això no és un error, sinó una distinció estadística clau:
+
+- **`scikit-learn` en Python utilitza la desviació estàndard poblacional** (dividint entre `n`), tractant el teu conjunt de dades com un univers complet.  
+- **`tidymodels` en R utilitza la desviació estàndard mostral** (dividint entre `n-1`), la qual és la pràctica estàndard en estadística per estimar els paràmetres d'una població més gran.  
+
+:::{.callout-tip #std-scaler-manual collapse="true"}
+### Sota el capó: el càlcul manual
+#### Implementació amb bucle
+
+Aquí tens com realitzar l'estandardització manualment.  
+
+Els noms de variables **mu** ($\mu$) per a la **mitjana** i **sigma** ($\sigma$) per a la desviació estàndard s'utilitzen per coincidir directament amb la fórmula.
+
+::: {.panel-tabset}
+
+### Python
+
+```{python}
+#| label: py-statistics
+#| echo: true
+# Primer, calcular les dues estadístiques clau per al conjunt de dades
+# mu (μ) és la mitjana
+mu = np.mean(data)
+
+# sigma (σ) és la desviació estàndard
+sigma = np.std(data)
+
+print("Mitjana (μ): ", mu, "\nDesviació estàndard (σ):", sigma)
+```
+
+### R
+
+```{r}
+#| label: r-statistics
+
+# Primer, calcular les dues estadístiques clau per al conjunt de dades
+# mu (μ) és la mitjana
+mu <- mean(data$feature)
+
+# sigma (σ) és la desviació estàndard
+sigma <- sd(data$feature)
+
+cat("Mitjana (μ): ", mu, "\nDesviació estàndard (σ): ", sigma)
+```
+
+:::
+
+##### Un breu desviament estadístic: Per què les desviacions estàndard són diferents?
+
+Una comparació de les sortides de Python i R ressalta un detall estadístic important. Mentre que la mitjana calculada és idèntica (30.0), les desviacions estàndard no ho són.
+
+- Sortida de `np.std()` en Python: **14.1421**  
+- Sortida de `sd()` en R: **15.8114**
+
+Això no és un error; és una distinció estadística crucial entre dues maneres diferents de calcular la desviació estàndard.
+
+**Desviació estàndard poblacional (l'opció per defecte a NumPy)**  
+
+Per defecte, `np.std()` a NumPy calcula la **desviació estàndard poblacional**. Aquest mètode és apropiat quan un conjunt de dades representa tota la població. La fórmula divideix la suma de les diferències al quadrat entre `n`, el nombre total d'observacions.
+
+**Desviació estàndard mostral (l'opció per defecte a R)**  
+
+Per defecte, la funció `sd()` a R calcula la **desviació estàndard mostral**. Aquest mètode és apropiat quan un conjunt de dades es considera una mostra d'una població més gran. En usar `n-1` al denominador, la fórmula ofereix una estimació més precisa i no esbiaixada de la desviació estàndard de la població.
+
+##### Fent que Python coincideixi amb R
+
+Python pot igualar fàcilment el resultat de R indicant a NumPy que utilitzi `n-1`. Això s'aconsegueix configurant el paràmetre `ddof=1` ("Delta Degrees of Freedom").
+
+```{python}
+#| label: py-std
+# Establir ddof=1 per indicar a NumPy que utilitzi n-1 al denominador,
+# per tal de calcular la desviació estàndard mostral
+sigma = np.std(data, ddof=1)
+
+print("Desviació estàndard mostral (σ): ", sigma)
+```
+
+La implementació amb un bucle for imita com es podria realitzar el càlcul a mà, processant un número cada vegada.
+
+Aquest mètode és explícit i **fàcil de seguir**, però pot ser **molt lent** per a conjunts de dades grans perquè Python ha d'interpretar cada pas del bucle individualment.
+
+::: {.panel-tabset}
+
+### Python
+
+El següent codi estandarditza les dades pas a pas:
+
+1. **Inicialització**: Una llista buida, `standardized_data`, emmagatzemarà els nous valors escalats calculats.  
+2. **Iteració**: Recorre cada element ($x$) de l'array de dades original.  
+3. **Transformació**: Dins del bucle, s'aplica la fórmula del Z-score restant la mitjana ($\mu$) al valor i dividint el resultat entre la desviació estàndard ($\sigma$).  
+4. **Acumulació**: El resultat d'aquest càlcul, `standardized_value`, s'afegeix a la llista `standardized_data`.  
+5. **Finalització**: El codi conclou convertint la llista de Python novament en un array de NumPy.
+
+```{python}
+#| label: py-forloop
+import numpy as np
+
+# Fer servir la mitjana prèviament calculada (mu) i restablir sigma 
+# per tal que coincideixi amb scikit-learn (desviació estàndard poblacional)
+sigma = np.std(data)
+
+# 1. Crear una llista buida per emmagatzemar els resultats
+standardized_data = []
+
+# 2. Recorre cada valor de les dades originals
+for x in data:
+    # 3. Aplicar la fórmula d'estandardització a cada valor
+    # Fórmula: z = (valor - mu) / sigma
+    standardized_value = (x - mu) / sigma
+
+    # 4. Afegir el resultat a la llista
+    standardized_data.append(standardized_value)
+
+# 5. Convertir la llista de resultats novament en un array de NumPy
+standardized_data = np.array(standardized_data)
+
+print("Dades estandarditzades:\n", np.round(standardized_data.T, 3))
+```
+
+### R
+
+El següent codi estandarditza les dades pas a pas:
+
+1.  **Inicialització (Preassignació):** Es crea un vector numèric, `standardized_data`, d'una mida predefinida usant `numeric()`. Aquesta és una optimització de rendiment comuna a R.  
+2.  **Iteració (Per índex):** Un bucle `for` itera sobre els **índexs** del vector (de l'1 al 5), generats per la funció `seq_along()`.  
+3.  **Accés a les dades i transformació:** Dins del bucle, l'índex actual (`i`) s'utilitza per accedir al valor corresponent en les dades originals: `data$feature[i]`. Per a cada valor individual, s'aplica la fórmula del Z-score restant la mitjana ($\mu$) i dividint entre la desviació estàndard ($\sigma$).  
+4.  **Assignació:** El resultat, `standardized_value`, s'assigna directament a la posició `i` del vector preassignat `standardized_data`.  
+
+```{r}
+#| label: r-forloop
+
+# Fer servir la mitjana (mu) i sigma prèviament calculats
+
+# 1. Preassignar un vector buit de la mida correcta
+standardized_data <- numeric(length(data$feature))
+
+# 2. Recorre cada valor usant el seu índex
+for (i in seq_along(data$feature)) {
+  # 3. Aplicar la fórmula d'estandardització a cada valor
+  # Fórmula: z = (valor - mu) / sigma
+  standardized_value <- (data$feature[i] - mu) / sigma
+  
+  # 4. Assignar el resultat a la posició corresponent del vector
+  standardized_data[i] <- standardized_value
+}
+
+cat("Dades estandarditzades: [", paste(round(standardized_data, 3), collapse = " "), "]")
+```
+
+:::
+
+#### La implementació (Vectoritzada)
+
+::: {.panel-tabset}
+
+### Python
+
+```{python}
+#| label: py-vectorized
+import numpy as np
+
+# L'enfocament vectoritzat aplica l'operació a tot l'array alhora
+# Aplicar la fórmula: (array - mu) / sigma
+standardized_data = (data - mu) / sigma
+
+print("Dades estandarditzades:", np.round(standardized_data.T, 3))
+```
+
+### R
+
+```{r}
+#| label: r-vectorized
+
+# La forma vectoritzada en R
+(data$feature - mu) / sigma
+```
+
+### La drecera en Base R: `scale()`
+
+Per a aquesta tasca específica (estandardització Z-score), Base R ofereix una funció dedicada i pràctica anomenada `scale()`. Aquesta realitza tant el centrat com l'escalat en un sol pas i retorna el resultat com una matriu.
+
+```{r}
+#| label: r-base-scale
+# La funció scale() s'encarrega de tot per tu
+scale(data$feature)
+```
+
+:::
+
+**La màgia darrere de la vectorització: Broadcasting i Reciclatge**
+
+Com operen aquests llenguatges sobre arrays complets sense un bucle? La màgia rau en una característica amb dos noms diferents per a la mateixa idea central: **broadcasting** en NumPy i **reciclatge de vectors** en R.
+
+Quan s'utilitza una expressió com `data - mu`, el llenguatge interpreta que la intenció és restar un sol número (un escalar) d'una col·lecció de números (un array o vector). En lloc de produir un error, “estira” o “recicla” el número únic perquè coincideixi amb la longitud de la col·lecció, i després realitza l'operació element per element.```
+
+  * En efecte, calcula:
+
+          [10.0,  20.0, 30.0, 40.0, 50.0]
+        - [30.0,  30.0, 30.0, 30.0, 30.0]  <- El mu difós (broadcasted)
+        ----------------------------------
+         [-20.0, -10.0,  0.0, 10.0, 20.0]
+
+**Operacions element per element:** El resultat de la resta és un nou array o vector. El llenguatge pren llavors aquest resultat i realitza la següent operació (divisió per $\sigma$) en cada element.
+
+Aquest enfocament vectoritzat és superior en la pràctica per dues raons principals:
+
+- **Rendiment:** Tant R com NumPy executen aquestes operacions vectoritzades no pas en els seus intèrprets d'alt nivell, sinó en codi C o Fortran altament optimitzat i precompilat. Això les fa ordres de magnitud més ràpides que un bucle `for`, especialment a mesura que augmenta la quantitat de dades.  
+- **Llegibilitat:** El codi esdevé més concís i s'assembla gairebé de manera idèntica a la fórmula matemàtica $( \frac{x - \mu}{\sigma})$, la qual cosa facilita que científics de dades i matemàtics el puguin llegir i verificar. Compara-ho amb la fórmula:```
+
+    - **Python**: `(data - mu) / sigma`  
+    - **R**: `(data$feature - mu) / sigma`
+
+Per aquestes raons, l'enfocament vectoritzat és el mètode preferit per a operacions matemàtiques en lloc dels bucles manuals.
+
+:::
+
+:::{.callout-note collapse="true"}
+
+### Casos d'ús avançats
+
+Tot i que `StandardScaler` gairebé sempre s'utilitza amb la seva configuració per defecte, existeixen escenaris específics, com treballar amb dades disperses en anàlisi de text, on es necessita més control. Aquests casos especials, inclosos els paràmetres **`with_mean`** i **`with_std`**, es cobriran a l'últim post de la sèrie.
+:::
+
+## Normalització (Escalat Min-Max)
+
+**Principi**: La normalització reescala tots els valors de les dades a un rang fix, normalment entre 0 i 1.
+
+**Fórmula:**
+$$X_{norm} = \frac{X - x_{min}}{x_{max} - x_{min}}$$
+
+**On**:
+
+- $x_{min}$ i $x_{max}$ són els valors mínim i màxim de la característica, respectivament.
+
+**Quan utilitzar-la**: És útil quan un algorisme requereix dades en un interval acotat. També s'utilitza àmpliament en el processament d'imatges, on els valors dels píxels es normalitzen a un rang. Tanmateix, és molt sensible a valors atípics: un sol valor extrem pot comprimir tots els altres punts de dades en un subrang molt petit.
+
+::: {.panel-tabset}
+
+### Python: `MinMaxScaler`
+
+```{python}
+#| label: py-min_max_scaler
+
+from sklearn.preprocessing import MinMaxScaler
+
+# Inicialitzar i ajustar/transformar les dades
+min_max_scaler = MinMaxScaler()
+normalized_data = min_max_scaler.fit_transform(data)
+
+print("Mínim après: ", min_max_scaler.data_min_,
+      "\nMàxim après: ", min_max_scaler.data_max_,
+      "\nDades normalitzades: ", normalized_data.T)
+```
+
+### R: `step_range()`
+
+Al framework `tidymodels` de R, l'equivalent de l'escalat Min-Max és `step_range()`. Aquest pas transforma les dades a un rang específic, que per defecte és `[0, 1]`.
+
+```{r}
+#| label: r-step_range
+#| message: false
+library(tidymodels)
+
+# Definir la recepta
+#  - Afegir la funció step_range().
+#  - El rang per defecte és min = 0 i max = 1.
+normalization_recipe <- recipe(~ feature, data = data) %>%
+  step_range(feature)
+
+# "Preparar" la recepta
+# Aquest pas aprèn el mínim i el màxim a partir de les dades.
+prepared_normalization_recipe <- prep(normalization_recipe, training = data)
+
+# "Aplicar" la recepta
+# Aquest pas aplica la transformació apresa.
+normalized_data <- bake(prepared_normalization_recipe, new_data = data)
+
+# Obtenir els paràmetres apresos
+min_max <- tidy(prepared_normalization_recipe, number = 1)
+
+cat(paste("Mínim après: ", min_max$min, '\nMàxim après: ', min_max$max),
+    "\nDades normalitzades: [",
+    paste(round(normalized_data$feature, 2), collapse = " "),"]")
+```
+
+- **`step_range()`**: Aquesta és la funció principal. Funciona igual que `step_normalize`, però en lloc d'estandarditzar, reescala les dades a un nou rang.  
+- **Rang per defecte:** Per defecte, `step_range()` escala a un rang de `[0, 1]`, exactament com el `MinMaxScaler` de `scikit-learn`, de manera que no cal especificar arguments addicionals per a aquest cas comú.
+
+:::
+
+:::{.callout-tip #minmax-scaler-manual collapse="true"}
+
+### Sota el capó: el càlcul manual
+#### La implementació (Vectoritzada)
+
+::: {.panel-tabset}
+
+### Python
+
+```{python}
+#| label: py-norm-vectorized
+
+# Trobar el valor mínim
+min_val = np.min(data)
+
+# Trobar el valor màxim
+max_val = np.max(data)
+
+# Aplicar la fórmula: (x - min) / (max - min)
+normalized_data = (data - min_val) / (max_val - min_val)
+
+print("Mínim: ", min_val, "\nMàxim: ", max_val,
+      "\nDades normalitzades: ", normalized_data.T)
+```
+
+### R
+
+```{r}
+#| label: r-norm-vectorized
+
+# Trobar el valor mínim
+min_val <- min(data$feature)
+
+# Trobar el valor màxim
+max_val <- max(data$feature)
+
+# Aplicar la fórmula: (x - min) / (max - min)
+normalized_data <- (data$feature - min_val) / (max_val - min_val)
+
+cat("Mínim: ", min_val, "\nMàxim: ", max_val,
+    "\nDades normalitzades: [", paste(normalized_data, collapse = " "), "]")
+```
+
+- **Noms de funcions:** Les funcions de base R són simplement `min()` i `max()`, la qual cosa fa que el codi sigui increïblement llegible.
+
+:::
+
+:::
+
+:::{.callout-note collapse="true"}
+
+### Triar una estratègia d'escalat: Estandardització vs. Normalització
+
+L'elecció entre estandardització (escalat Z-score) i normalització (escalat Min-Max) és una decisió crítica en molts fluxos de preprocessament de dades. Tot i que ambdues són comunes, es basen en principis diferents i estan millor adaptades a tasques diferents.
+
+-   **Estandardització** sol ser la tècnica recomanada per defecte. El seu enfocament estadístic, que transforma les dades perquè tinguin una mitjana de 0 i una desviació estàndard d'1, resulta beneficiós per a molts algorismes clàssics d'aprenentatge automàtic, com la Regressió Lineal o les Màquines de Vectors de Suport, que funcionen millor quan les característiques estan centrades al voltant de zero. Aquest mètode és particularment eficaç si les dades de les característiques segueixen aproximadament una distribució Gaussiana (en forma de campana).
+
+-   **Normalització**, en canvi, és l'opció preferida quan es requereix estrictament un rang de sortida acotat. Això és essencial en aplicacions específiques com el **Processament d'Imatges**, on els valors dels píxels s'escala a un rang, i en les **Xarxes Neuronals**. En xarxes neuronals, funcions d'activació com la sigmoide o la tanh poden comportar-se malament amb valors d'entrada grans, per la qual cosa comprimir les característiques en un rang consistent (per exemple, [0, 1] o [-1, 1]) ajuda a garantir un entrenament estable i eficaç. Tanmateix, s'ha d'utilitzar amb precaució, ja que la seva alta sensibilitat a valors atípics pot comprimir la majoria dels punts de dades en un subrang molt petit.
+
+En resum, l'**estandardització** funciona com una opció robusta per defecte adequada per a la majoria de models d'aprenentatge automàtic. L'ús de la **normalització** per escalar característiques a un rang estricte i acotat ha de ser una elecció deliberada, generalment reservada per a casos en què l'arquitectura d'un algorisme ho requereixi (com en xarxes neuronals) o quan un rang directament interpretable sigui essencial.
+:::
+
+## Escalat Robust
+
+**Principi**: L'Escalat Robust ajusta les dades d'acord amb el **Rang Interquartílic** (**IQR**). Resta la mediana i escala les dades usant la diferència entre el primer quartil (percentil 25) i el tercer quartil (percentil 75).
+
+**Fórmula**:
+$$X_{scaled} = \frac{X - q_2}{q_3 - q_1}$$
+
+**On**:
+
+- $q_1$, $q_2$ i $q_3$ són el primer, segon (mediana) i tercer quartil, respectivament.
+
+**Quan utilitzar-lo**: Aquest mètode és, com el seu nom indica, “robust” davant de valors atípics. Si el teu conjunt de dades té valors extrems significatius, l'estandardització es pot veure esbiaixada. L'Escalat Robust utilitza la mediana i l'IQR, que es veuen molt menys afectats per valors extrems, cosa que el converteix en una millor opció en aquestes situacions.
+
+::: {.panel-tabset}
+
+### Python: `RobustScaler`
+
+```{python}
+#| label: py-robust-scaler
+from sklearn.preprocessing import RobustScaler
+
+# Inicialitzar i ajustar/transformar les dades
+robust_scaler = RobustScaler()
+scaled_data = robust_scaler.fit_transform(data)
+
+print("Mediana apresa: ", robust_scaler.center_,
+      "\nIQR après: ", robust_scaler.scale_,
+      "\nDades escalades: ", scaled_data.T)
+```
+
+### R: Escalat Robust Personalitzat
+
+Aquest és un gran exemple de les diferents filosofies entre Python i R. Mentre que `scikit-learn` ofereix un `RobustScaler` dedicat, l'ecosistema de `tidymodels` no té una única funció equivalent.
+
+En lloc d'això, l'enfocament idiomàtic en R és aprofitar la flexibilitat del framework `recipes` per crear una transformació d'escalat robust. Això es pot fer utilitzant la funció `step_mutate()` per aplicar la fórmula manualment. Això demostra el poder i l'extensibilitat del flux de treball amb `recipes`.
+
+```{r}
+#| label: r-robust_range
+#| message: false
+library(tidymodels)
+
+# Definir la recepta amb una mutació personalitzada
+recipe_robust <- recipe(~ feature, data = data) %>%
+  step_mutate(feature = (feature - median(feature)) / IQR(feature))
+
+# "Preparar" la recepta
+prepared_recipe_robust <- prep(recipe_robust, training = data)
+
+# "Aplicar" la recepta
+# Aquest pas aplica la fórmula.
+scaled_data <- bake(prepared_recipe_robust, new_data = data)
+
+cat('Mediana: ', median(data$feature), "\nIQR: ", IQR(data$feature),
+    "\nDades escalades: [", paste(scaled_data$feature, collapse = " "), "]")
+```
+
+- **`step_mutate(feature = ...)`**: Aquest és el nucli de la solució. `step_mutate()` és una funció del paquet `recipes` que permet crear o sobreescriure una columna utilitzant un càlcul personalitzat.  
+- **`(feature - median(feature)) / IQR(feature)`**: Aquesta és la fórmula manual per a l'escalat robust. Indica a la recepta: "Per a la columna `feature`, reemplaça els seus valors actuals amb el resultat d'aquest càlcul."  
+  - `median(feature)`: Calcula la mediana de la columna `feature`.  
+  - `IQR(feature)`: Calcula el Rang Interquartílic (IQR) de la columna `feature`.  
+
+**El flux de treball continua sent el mateix:** Encara que s'hagi utilitzat una fórmula personalitzada, el poderós flux "definir, preparar, aplicar" es manté idèntic. Aquesta és la bellesa del framework `recipes`: proporciona una estructura consistent tant per a transformacions integrades com per a personalitzades.
+
+:::
+
+:::{.callout-tip #robust-scaler-manual collapse="true"}
+
+### Sota el capó: el càlcul manual
+#### La implementació (Vectoritzada)
+
+::: {.panel-tabset}
+
+### Python
+
+```{python}
+#| label: py-robust-vectorized
+from scipy.stats import iqr
+import numpy as np
+
+# Calcular la mediana
+median_val = np.median(data)
+
+# Calcular el Rang Interquartílic (IQR)
+iqr_val = iqr(data)
+
+# Aplicar la fórmula: (x - mediana) / IQR
+scaled_data = (data - median_val) / iqr_val
+
+print("Mediana: ", median_val,
+      "\nIQR: ", iqr_val,
+      "\nDades escalades: ", scaled_data.T)
+```
+
+### R
+
+```{r}
+#| label: r-robust-vectorized
+# Calcular la mediana
+median_val <- median(data$feature)
+
+# Calcular el Rang Interquartílic (IQR)
+iqr_val <- IQR(data$feature)
+
+# Aplicar la fórmula: (x - mediana) / IQR
+scaled_data <- (data$feature - median_val) / iqr_val
+
+cat("Mediana: ", median_val, "\nIQR: ", iqr_val,
+    "\nDades escalades: [", paste(scaled_data, collapse = " "), "]")
+```
+
+- **La funció `IQR()`:** R té una funció integrada i dedicada `IQR()` que calcula directament el Rang Interquartílic, cosa que fa que el codi sigui més concís i llegible.  
+- **Noms de variables:** Els noms de variables `median_val` i `iqr_val` s'utilitzen per evitar conflictes amb les funcions integrades de R `median()` i `IQR()`. Aquesta és una pràctica estàndard a R per prevenir conflictes de noms.  
+:::
+:::
+
+## Comparacions visuals
+
+Perquè aquests conceptes siguin més clars, he representat gràficament la transformació de la mateixa característica sota cada tècnica. No estem comparant entre diferents característiques; l'objectiu aquí és aïllar l'efecte de cada mètode d'escalat en una sola variable.
+
+```{python}
+#| label: py-matplotlib
+#| echo: false
+
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler
+
+# Dades originals
+data = np.array([[10.0], [20.0], [30.0], [40.0], [50.0]])
+
+# Versions escalades
+scaled_standard = StandardScaler().fit_transform(data)
+scaled_minmax = MinMaxScaler().fit_transform(data)
+scaled_robust = RobustScaler().fit_transform(data)
+
+# Crear graella 2×2
+fig, axes = plt.subplots(2, 2, figsize=(8, 6))
+axes = axes.flatten()
+
+# Configuració dels gràfics
+plots_data = [
+    ("Original", data, "blue"),
+    ("Estandardització", scaled_standard, "orange"),
+    ("Normalització", scaled_minmax, "green"),
+    ("Escalat Robust", scaled_robust, "red")
+]
+
+for ax, (title, values, color) in zip(axes, plots_data):
+    _ = ax.plot(range(1, len(values) + 1), values.flatten(), marker='o', color=color)
+    _ = ax.axhline(0, color='gray', linestyle='--', linewidth=0.8)
+    _ = ax.set_title(title)
+    _ = ax.set_xticks([])
+    _ = ax.set_xticklabels([])
+    ax.grid(False)
+
+plt.tight_layout()
+plt.show()
+```
+
+### Com llegir aquesta figura
+
+- **Una característica, mateix conjunt de mostres.** Els quatre panells mostren la *mateixa* característica mesurada en les mateixes cinc mostres.  
+  Les etiquetes de l'eix X estan ocultes expressament: la posició simplement reflecteix l'ordre de les mostres.  
+- **Per què panells separats?** La transformació de cada escalador es mostra en el seu propi panell perquè el seu efecte es pugui veure clarament sense interferències d'altres escales:  
+  - **Original:** valors en brut, sense escalar.  
+  - **Estandardització:** centrat en 0 amb variància unitaria.  
+  - **Normalització:** estirat per ajustar-se dins de **[0, 1]**.  
+  - **Escalat Robust:** centrat en la mediana i escalat per **IQR = Q3 − Q1**.  
+- **Escales Y independents.** Cada subgràfic té la seva pròpia escala vertical perquè els patrons més petits (com el rang Min-Max) no quedin visualment aplanats pels rangs més grans d'altres escaladors.  
+  La línia discontínua en **y = 0** és una referència visual per al centrat.  
+
+## Resum
+
+| Tècnica | Principi | Implementacions clau | Cas d'ús principal | Sensibilitat als valors atípics (outliers) |
+| :--- | :--- | :--- | :--- | :--- |
+| **Estandardització** (Z-score) | Ajusta mitjana=0, desviació estàndard=1. | `sklearn.preprocessing.StandardScaler`<br>`recipes::step_normalize`<br>`base::scale` | Propòsit general, opció per defecte. Millor per a dades amb distribució Gaussiana. | Moderada |
+| **Normalització** (Escalat Min-Max) | Escala a un rang fix, p. ex. [0, 1]. | `sklearn.preprocessing.MinMaxScaler`<br>`recipes::step_range` | **Xarxes Neuronals**, **Processament d'Imatges** (quan es requereix un rang estricte de sortida). | Alta |
+| **Escalat Robust** | Escala usant la Mediana i l'IQR. | `sklearn.preprocessing.RobustScaler`<br>`recipes::step_mutate` | Dades amb **valors atípics** significatius. | Baixa |
+
+## Sensibilitat de les tècniques d'escalat als valors atípics
+
+Ara ve la part més important. En aquesta secció, mostrarem com reaccionen les tres tècniques d'escalat quan apareix un valor extrem. Aquí és on realment veuràs la diferència pràctica entre elles i entendràs la lògica per escollir-ne una o una altra.
+
+Primer, crearem dos conjunts de dades simples: les dades originals netes i una versió amb un valor atípic significatiu.
+
+::: {.panel-tabset}
+### Python
+
+```{python}
+#| label: py-datasets
+import numpy as np
+
+# Les dades originals
+original_data = np.array([[10.0], [20.0], [30.0], [40.0], [50.0]])
+
+# Les mateixes dades però amb un valor atípic extrem 500
+outlier_data = np.array([[10.0], [20.0], [30.0], [40.0], [500.0] ])
+
+print("Dades originals: ", original_data.T,
+      "\nDades amb valor atípic: ", outlier_data.T)
+```
+
+### R
+```{r}
+#| label: r-datasets
+library(tibble)
+
+# Les dades originals netes
+original_data <- tibble(feature = c(10, 20, 30, 40, 50))
+
+# Les mateixes dades però amb un valor atípic extrem
+outlier_data <- tibble(feature = c(10, 20, 30, 40, 500))
+
+cat("Dades originals: [",
+    paste(original_data, collapse = " "),
+    "]\nDades amb valor atípic: [",
+    paste(outlier_data, collapse = " "), "]")
+```
+
+:::
+
+### Sensibilitat de l'Estandardització
+
+L'estandardització utilitza la mitjana ($\mu$) i la desviació estàndard ($\sigma$) per als seus càlculs. Com que ambdues estadístiques són fàcilment influenciades per valors extrems, aquesta tècnica és moderadament sensible als valors atípics.
+
+::: {.panel-tabset}
+### Python
+```{python}
+#| label: py-standard-outlier
+from sklearn.preprocessing import StandardScaler
+import numpy as np
+
+# Escalar les dades originals
+std_scaler = StandardScaler()
+standardized_original_data = std_scaler.fit_transform(original_data)
+
+# Escalar les dades amb valor atípic
+std_scaler_outlier = StandardScaler()
+standardized_outlier_data = std_scaler_outlier.fit_transform(outlier_data)
+
+print("Mitjana apresa (dades originals): ", std_scaler.mean_,
+      "\nDesviació estàndard apresa (dades originals): ", std_scaler.scale_,
+      "\nDades originals estandarditzades: ", np.round(standardized_original_data.T, 3),
+      "\nMitjana apresa (dades amb valor atípic): ", std_scaler_outlier.mean_,
+      "\nDesviació estàndard apresa (dades amb valor atípic): ", std_scaler_outlier.scale_,
+      "\nDades amb valor atípic estandarditzades: ", np.round(standardized_outlier_data.T, 3)
+)
+```
+
+### R
+```{r}
+#| label: r-standard-outlier
+library(tidymodels)
+library(dplyr)
+
+# Recepta, preparació i aplicació per a les dades originals 
+recipe_orig_std <- recipe(~ feature, data = original_data) %>%
+  step_normalize(feature)
+prep_recipe_orig_std <- prep(recipe_orig_std, training = original_data)
+standardized_orig_data <- bake(prep_recipe_orig_std, new_data = original_data)
+
+# Obtenir els paràmetres apresos
+mean_sd_orig <- tidy(prep_recipe_orig_std, number = 1)
+
+# Extreure els valors específics del tibble
+mean_orig <- mean_sd_orig %>% filter(statistic == "mean") %>% pull(value)
+sd_orig   <- mean_sd_orig %>% filter(statistic == "sd") %>% pull(value)
+
+# Recepta, preparació i aplicació per a les dades amb valor atípic 
+recipe_outlier_std <- recipe(~ feature, data = outlier_data) %>%
+  step_normalize(feature)
+prep_recipe_outlier_std <- prep(recipe_outlier_std, training = outlier_data)
+standardized_outlier_data <- bake(prep_recipe_outlier_std, new_data = outlier_data)
+
+# Obtenir els paràmetres apresos
+mean_sd_out <- tidy(prep_recipe_outlier_std, number = 1)
+
+# Extreure els valors específics del tibble
+mean_out <- mean_sd_out %>% filter(statistic == "mean") %>% pull(value)
+sd_out   <- mean_sd_out %>% filter(statistic == "sd") %>% pull(value)
+
+cat(
+  "Mitjana apresa (dades originals): ", mean_orig,
+  "\nDesviació estàndard apresa (dades originals): ", sd_orig,
+  "\nDades originals estandarditzades: [", paste(round(standardized_orig_data, 3), collapse = " "), "]",
+  "\nMitjana apresa (dades amb valor atípic): ", mean_out,
+  "\nDesviació estàndard apresa (dades amb valor atípic): ", sd_out,
+  "\nDades amb valor atípic estandarditzades: [", paste(round(standardized_outlier_data, 3), collapse = " "), "]"
+
+)
+```
+
+:::
+
+**Anàlisi**:
+
+El valor atípic `500.0` va incrementar dràsticament tant la mitjana com la desviació estàndard. A causa que la nova desviació estàndard és tan gran, els valors transformats dels punts originals `([10, 20, 30, 40])` ara estan tots agrupats molt a prop entre ells. La tècnica ha reduït efectivament la seva variància, tractant-los com si fossin gairebé el mateix valor.
+
+### Sensibilitat de la Normalització (Min-Max)
+
+L'escalat Min-Max es defineix pels valors mínims i màxims absoluts de les dades, cosa que el fa **altament sensible** als valors atípics.
+
+::: {.panel-tabset}
+### Python
+```{python}
+#| label: py-minmax-outlier
+from sklearn.preprocessing import MinMaxScaler
+import numpy as np
+
+# Escalar les dades originals
+scaler_minmax = MinMaxScaler()
+normalized_orig_data = scaler_minmax.fit_transform(original_data)
+
+# Escalar les dades amb valor atípic
+scaler_minmax_outlier = MinMaxScaler()
+normalized_outlier_data = scaler_minmax_outlier.fit_transform(outlier_data)
+
+print("Dades originals normalitzades: ", normalized_orig_data.T,
+      "\nDades amb valor atípic normalitzades: ", np.round(normalized_outlier_data.T, 3))
+```
+
+### R
+```{r}
+#| label: r-minmax-outlier
+library(tidymodels)
+
+# Recepta per a les dades originals 
+recipe_orig_mm <- recipe(~ feature, data = original_data) %>% step_range(feature)
+normalized_orig_data <- prep(recipe_orig_mm) %>% bake(new_data = NULL)
+
+# Recepta per a les dades amb valor atípic 
+recipe_outlier_mm <- recipe(~ feature, data = outlier_data) %>% step_range(feature)
+normalized_outlier_data <- prep(recipe_outlier_mm) %>% bake(new_data = NULL)
+
+cat("Dades originals normalitzades: [", paste(normalized_orig_data, collapse = " "),
+    "]\nDades amb valor atípic normalitzades: [", paste(round(normalized_outlier_data, 3), collapse = " "), "]")
+```
+
+:::
+
+**Anàlisi**:
+
+Observa com el valor atípic `500.0` es converteix en el nou màxim (1.0). Com a resultat, tots els punts de dades originals ara queden comprimids en una petita part del rang (de 0 a ~0.06). Les distàncies relatives entre aquests punts originals es perden gairebé completament. Aquest comportament pot arruïnar el rendiment de qualsevol model que depengui d'aquestes distàncies.
+
+### Resistència de l'Escalat Robust
+
+El `RobustScaler` utilitza la mediana i el Rang Interquartílic (IQR), que són estadístiques que no es veuen significativament afectades per uns pocs valors atípics extrems. Això el fa “robust”.
+
+::: {.panel-tabset}
+### Python
+```{python}
+#| label: py-robust-outlier
+from sklearn.preprocessing import RobustScaler
+
+# Escalar les dades originals
+scaler_robust = RobustScaler()
+scaled_orig_data = scaler_robust.fit_transform(original_data)
+
+# Escalar les dades amb valor atípic
+scaler_robust_outlier = RobustScaler()
+scaled_outlier_data = scaler_robust_outlier.fit_transform(outlier_data)
+
+print("Dades originals escalades: ", scaled_orig_data.T,
+      "\nDades amb valor atípic escalades: ", np.round(scaled_outlier_data.T, 3))
+```
+
+### R
+```{r}
+#| label: r-robust-outlier
+library(tidymodels)
+
+# Recepta per a les dades originals 
+recipe_orig_robust <- recipe(~ feature, data = original_data) %>%
+  step_mutate(feature = (feature - median(feature)) / IQR(feature))
+scaled_orig_data <- prep(recipe_orig_robust) %>% bake(new_data = NULL)
+
+# Recepta per a les dades amb valor atípic 
+recipe_outlier_robust <- recipe(~ feature, data = outlier_data) %>%
+  step_mutate(feature = (feature - median(feature)) / IQR(feature))
+scaled_outlier_data <- prep(recipe_outlier_robust) %>% bake(new_data = NULL)
+
+cat("Dades originals escalades: [", paste(scaled_orig_data, collapse = " "),
+    "]\nDades amb valor atípic escalades: [", paste(round(scaled_outlier_data, 3), collapse = " "), "]")
+```
+
+:::
+
+**Anàlisi**:
+
+Mira això! Els valors escalats són **idèntics** per als primers quatre punts de dades en tots dos escenaris! Com que la mediana (30.0) i el Rang Interquartílic (40.0 - 20.0 = 20) són exactament els mateixos per a tots dos conjunts de dades, l'escalat dels punts sense valors atípics no es veu afectat en absolut. El valor atípic es transforma en un nombre gran, però **no distorsiona l'escalat de la resta de valors**. Això preserva l'espaiat relatiu de les dades originals sense valors atípics, fet que converteix l'escalat robust en el clar guanyador quan hi ha valors atípics.
+
+## Enllaços a la documentació
+
+Per ampliar informació i veure els detalls oficials de les APIs, aquí tens els enllaços directes dels escaladors i funcions tractats en aquest post.
+
+### **scikit-learn**
+
+- [**StandardScaler**](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.StandardScaler.html)  
+  Escala característiques perquè tinguin mitjana zero i variància unitària.
+- [**MinMaxScaler**](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.MinMaxScaler.html)  
+  Escala característiques a un rang especificat, per defecte [0, 1].
+- [**RobustScaler**](https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.RobustScaler.html)  
+  Escala característiques utilitzant estadístiques robustes a valors atípics (mediana i IQR).
+
+### **tidymodels / recipes**
+
+- [**step_normalize()**](https://recipes.tidymodels.org/reference/step_normalize.html)  
+  Estandarditza dades numèriques a mitjana zero i variància unitària.
+- [**step_range()**](https://recipes.tidymodels.org/reference/step_range.html)  
+  Normalitza dades numèriques a un rang especificat.
+- [**step_mutate()**](https://recipes.tidymodels.org/reference/step_mutate.html)  
+  Crea o transforma variables usant expressions personalitzades.
+
+## Què ve a continuació?
+
+En aquest post hem vist tres de les tècniques d'escalat més comunes i hem explorat el seu comportament sobre la mateixa característica, incloent-hi com respon cadascuna davant valors atípics.
+
+A la **Part 3** de la sèrie *Feature Scaling*, aprofundirem en transformadors menys comuns però molt efectius: **MaxAbsScaler**, **PowerTransformer** i **QuantileTransformer**, amb una breu ullada a **Normalizer**, que persegueix un propòsit molt diferent però sovint es menciona al costat dels escaladors.
