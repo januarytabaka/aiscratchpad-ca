@@ -78,7 +78,7 @@ $$ Z = \frac{X - \mu}{\sigma} $$
 
 **Quan utilitzar-la**: Aquest és l'escalador més comú i utilitzat per defecte. És especialment efectiu si les teves dades segueixen una distribució Gaussiana (normal).
 
-Aquí tens com implementar-ho utilitzant les llibreries estàndard en Python i R.```
+Aquí tens com implementar-ho utilitzant les llibreries estàndard en Python i R.
 
 ::: {.panel-tabset}
 
@@ -325,7 +325,7 @@ scale(data$feature)
 
 Com operen aquests llenguatges sobre arrays complets sense un bucle? La màgia rau en una característica amb dos noms diferents per a la mateixa idea central: **broadcasting** en NumPy i **reciclatge de vectors** en R.
 
-Quan s'utilitza una expressió com `data - mu`, el llenguatge interpreta que la intenció és restar un sol número (un escalar) d'una col·lecció de números (un array o vector). En lloc de produir un error, “estira” o “recicla” el número únic perquè coincideixi amb la longitud de la col·lecció, i després realitza l'operació element per element.```
+Quan s'utilitza una expressió com `data - mu`, el llenguatge interpreta que la intenció és restar un sol número (un escalar) d'una col·lecció de números (un array o vector). En lloc de produir un error, “estira” o “recicla” el número únic perquè coincideixi amb la longitud de la col·lecció, i després realitza l'operació element per element.
 
   * En efecte, calcula:
 
